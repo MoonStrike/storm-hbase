@@ -80,4 +80,12 @@ public class HBaseLookupBolt extends AbstractHBaseBolt {
     public void declareOutputFields(OutputFieldsDeclarer outputFieldsDeclarer) {
         rowToTupleMapper.declareOutputFields(outputFieldsDeclarer);
     }
+
+    public HBaseProjectionCriteria getHBaseProjectionCriteria() {
+        return projectionCriteria;
+    }
+
+    public void setHBaseProjectionCriteria(HBaseProjectionCriteria projectionCriteria) {
+        this.projectionCriteria = projectionCriteria;
+    }
 }

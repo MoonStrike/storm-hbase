@@ -19,8 +19,7 @@ package org.apache.storm.hbase.bolt;
 
 import backtype.storm.topology.OutputFieldsDeclarer;
 import backtype.storm.tuple.Tuple;
-import org.apache.hadoop.hbase.client.Durability;
-import org.apache.hadoop.hbase.client.Mutation;
+import org.apache.hadoop.hbase.client.*;
 import org.apache.storm.hbase.bolt.mapper.HBaseMapper;
 import org.apache.storm.hbase.common.ColumnList;
 import org.slf4j.Logger;
@@ -57,7 +56,7 @@ public class HBaseBolt  extends AbstractHBaseBolt {
     public void execute(Tuple tuple) {
         byte[] rowKey = this.mapper.rowKey(tuple);
         ColumnList cols = this.mapper.columns(tuple);
-        List<Mutation> mutations = hBaseClient.constructMutationReq(rowKey, cols, writeToWAL? Durability.SYNC_WAL : Durability.SKIP_WAL);
+        List<Row> mutations = hBaseClient.constructMutationReq(rowKey, cols, writeToWAL);
 
         try {
             this.hBaseClient.batchMutate(mutations);

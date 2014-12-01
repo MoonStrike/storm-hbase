@@ -21,14 +21,13 @@ package org.apache.storm.hbase.topology;
 import backtype.storm.topology.OutputFieldsDeclarer;
 import backtype.storm.tuple.Fields;
 import backtype.storm.tuple.Values;
-import org.apache.hadoop.hbase.Cell;
-import org.apache.hadoop.hbase.CellUtil;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.storm.hbase.bolt.mapper.HBaseValueMapper;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NavigableMap;
 
 /**
  * Takes a Hbase result and returns a value list that has a value instance for each column and corresponding value.
@@ -53,11 +52,17 @@ public class WordCountValueMapper implements HBaseValueMapper {
     @Override
     public List<Values> toValues(Result result) throws Exception {
         List<Values> values = new ArrayList<Values>();
-        Cell[] cells = result.rawCells();
-        for(Cell cell : cells) {
-            Values value = new Values (Bytes.toString(CellUtil.cloneQualifier(cell)), Bytes.toLong(CellUtil.cloneValue(cell)));
-            values.add(value);
+        NavigableMap<byte[], NavigableMap<byte[], byte[]>> map = result.getNoVersionMap();
+
+        for (byte[] family : map.keySet()) {
+            NavigableMap<byte[], byte[]> cellMap = map.get(family);
+            for (byte[] qualifier: cellMap.keySet()) {
+                byte[] cellValue = cellMap.get(qualifier);
+                Values value = new Values (Bytes.toString(qualifier), Bytes.toLong(cellValue));
+                values.add(value);
+            }
         }
+
         return values;
     }
 

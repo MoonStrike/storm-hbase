@@ -20,42 +20,34 @@ package org.apache.storm.hbase.common;
 import com.google.common.collect.Lists;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.client.*;
-import org.apache.hadoop.hbase.security.UserProvider;
+import org.apache.hadoop.hbase.filter.BinaryPrefixComparator;
+import org.apache.hadoop.hbase.filter.CompareFilter;
+import org.apache.hadoop.hbase.filter.Filter;
+import org.apache.hadoop.hbase.filter.RowFilter;
 import org.apache.storm.hbase.bolt.mapper.HBaseProjectionCriteria;
-import org.apache.storm.hbase.security.HBaseSecurityUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 public class HBaseClient {
     private static final Logger LOG = LoggerFactory.getLogger(HBaseClient.class);
 
-    private HTable table;
+    private HTableInterface table;
 
     public HBaseClient(Map<String, Object> map , final Configuration configuration, final String tableName) {
-        try {
-            UserProvider provider = HBaseSecurityUtil.login(map, configuration);
-            this.table = provider.getCurrent().getUGI().doAs(new PrivilegedExceptionAction<HTable>() {
-                @Override
-                public HTable run() throws IOException {
-                    return new HTable(configuration, tableName);
-                }
-            });
-        } catch(Exception e) {
-            throw new RuntimeException("HBase bolt preparation failed: " + e.getMessage(), e);
-        }
+        table = new HTablePool(configuration, Integer.MAX_VALUE).getTable(tableName);
     }
 
-    public List<Mutation> constructMutationReq(byte[] rowKey, ColumnList cols, Durability durability) {
-        List<Mutation> mutations = Lists.newArrayList();
+    public List<Row> constructMutationReq(byte[] rowKey, ColumnList cols, boolean durability) {
+        List<Row> mutations = Lists.newArrayList();
 
         if (cols.hasColumns()) {
             Put put = new Put(rowKey);
-            put.setDurability(durability);
+            put.setWriteToWAL(durability);
             for (ColumnList.Column col : cols.getColumns()) {
                 if (col.getTs() > 0) {
                     put.add(
@@ -77,7 +69,7 @@ public class HBaseClient {
 
         if (cols.hasCounters()) {
             Increment inc = new Increment(rowKey);
-            inc.setDurability(durability);
+            inc.setWriteToWAL(durability);
             for (ColumnList.Counter cnt : cols.getCounters()) {
                 inc.addColumn(
                         cnt.getFamily(),
@@ -94,7 +86,7 @@ public class HBaseClient {
         return mutations;
     }
 
-    public void batchMutate(List<Mutation> mutations) throws Exception {
+    public void batchMutate(List<Row> mutations) throws Exception {
         Object[] result = new Object[mutations.size()];
         try {
             table.batch(mutations, result);
@@ -129,6 +121,44 @@ public class HBaseClient {
             return table.get(gets);
         } catch (Exception e) {
             LOG.warn("Could not perform HBASE lookup.", e);
+            throw e;
+        }
+    }
+
+    public Scan constructScanRequests(byte[] rowKey, HBaseProjectionCriteria projectionCriteria) {
+        Scan scan = new Scan();
+
+        if (projectionCriteria != null) {
+            for (byte[] columnFamily : projectionCriteria.getColumnFamilies()) {
+                scan.addFamily(columnFamily);
+            }
+
+            for (HBaseProjectionCriteria.ColumnMetaData columnMetaData : projectionCriteria.getColumns()) {
+                scan.addColumn(columnMetaData.getColumnFamily(), columnMetaData.getQualifier());
+            }
+        }
+
+        Filter filter = new RowFilter(CompareFilter.CompareOp.EQUAL, new BinaryPrefixComparator(rowKey));
+        scan.setFilter(filter);
+
+        return scan;
+    }
+
+    public Result[] scan(Scan scan) throws Exception {
+        try {
+            List<Result> resultList = new ArrayList<Result>();
+
+            for (Result r: table.getScanner(scan)) {
+                resultList.add(r);
+            }
+
+            Result[] results = new Result[resultList.size()];
+            results = resultList.toArray(results);
+
+            return results;
+        }
+        catch (Exception e) {
+            LOG.warn("Could not perform HBASE scan.", e);
             throw e;
         }
     }

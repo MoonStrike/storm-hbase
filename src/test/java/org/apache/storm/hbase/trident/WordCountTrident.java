@@ -23,7 +23,6 @@ import backtype.storm.StormSubmitter;
 import backtype.storm.generated.StormTopology;
 import backtype.storm.tuple.Fields;
 import backtype.storm.tuple.Values;
-import org.apache.hadoop.hbase.client.Durability;
 import org.apache.storm.hbase.bolt.mapper.HBaseProjectionCriteria;
 import org.apache.storm.hbase.bolt.mapper.HBaseValueMapper;
 import org.apache.storm.hbase.topology.WordCountValueMapper;
@@ -63,7 +62,7 @@ public class WordCountTrident {
 
         HBaseState.Options options = new HBaseState.Options()
                 .withConfigKey(hbaseRoot)
-                .withDurability(Durability.SYNC_WAL)
+                .withDurability(true)
                 .withMapper(tridentHBaseMapper)
                 .withProjectionCriteria(projectionCriteria)
                 .withRowToStormValueMapper(rowToStormValueMapper)

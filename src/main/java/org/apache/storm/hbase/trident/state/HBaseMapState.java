@@ -7,8 +7,6 @@ import com.google.common.collect.Maps;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.client.*;
-import org.apache.hadoop.hbase.security.UserProvider;
-import org.apache.storm.hbase.security.HBaseSecurityUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import storm.trident.state.*;
@@ -18,7 +16,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.io.Serializable;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -41,7 +38,7 @@ public class HBaseMapState<T> implements IBackingMap<T> {
 
     private Options<T> options;
     private Serializer<T> serializer;
-    private HTable table;
+    private HTableInterface table;
 
     public HBaseMapState(final Options<T> options, Map map, int partitionNum) {
         this.options = options;
@@ -62,18 +59,7 @@ public class HBaseMapState<T> implements IBackingMap<T> {
             }
         }
 
-        try{
-            UserProvider provider = HBaseSecurityUtil.login(map, hbConfig);
-            this.table = provider.getCurrent().getUGI().doAs(new PrivilegedExceptionAction<HTable>() {
-                @Override
-                public HTable run() throws IOException {
-                    return new HTable(hbConfig, options.tableName);
-                }
-            });
-        } catch(Exception e){
-            throw new RuntimeException("HBase bolt preparation failed: " + e.getMessage(), e);
-        }
-
+        table = new HTablePool(hbConfig, Integer.MAX_VALUE).getTable(options.tableName);
     }
 
 
@@ -214,6 +200,8 @@ public class HBaseMapState<T> implements IBackingMap<T> {
             throw new FailedException("Interrupted while writing to HBase", e);
         } catch (RetriesExhaustedWithDetailsException e) {
             throw new FailedException("Retries exhaused while writing to HBase", e);
+        } catch (IOException e) {
+            throw new FailedException("IOException while writing to HBase", e);
         }
     }
 

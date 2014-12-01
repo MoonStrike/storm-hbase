@@ -57,13 +57,13 @@ public class HBaseState implements State {
 
     public static class Options implements Serializable {
         private TridentHBaseMapper mapper;
-        private Durability durability = Durability.SKIP_WAL;
+        private boolean durability = false;
         private HBaseProjectionCriteria projectionCriteria;
         private HBaseValueMapper rowToStormValueMapper;
         private String configKey;
         private String tableName;
 
-        public Options withDurability(Durability durability) {
+        public Options withDurability(boolean durability) {
             this.durability = durability;
             return this;
         }
@@ -123,7 +123,7 @@ public class HBaseState implements State {
     }
 
     public void updateState(List<TridentTuple> tuples, TridentCollector collector) {
-        List<Mutation> mutations = Lists.newArrayList();
+        List<Row> mutations = Lists.newArrayList();
 
         for (TridentTuple tuple : tuples) {
             byte[] rowKey = options.mapper.rowKey(tuple);
